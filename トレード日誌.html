@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>TJRトレード日誌</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow column like a paper logbook; sticky week strip on top, tabs below, form in numbered steps (the real journaling order) */
+:root{
+  --bg:#EDF0EF; --surface:#FFFFFF; --sunk:#F5F7F6; --ink:#17212A; --muted:#5D6A72; --line:#D3D9D9;
+  --accent:#22567A; --accent-ink:#FFFFFF; --accent-soft:#DCE7EE;
+  --win:#1D7A4E; --win-soft:#DDF0E5; --loss:#B3362E; --loss-soft:#F7E1DE; --warn:#A86400; --warn-soft:#FBEBD2;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F151A; --surface:#161F26; --sunk:#1B262E; --ink:#E3E9EB; --muted:#8D9AA2; --line:#2A3640;
+  --accent:#86B6D8; --accent-ink:#0F151A; --accent-soft:#1D3343;
+  --win:#55C48F; --win-soft:#173327; --loss:#F07C72; --loss-soft:#3A1F1D; --warn:#EDB050; --warn-soft:#3A2C14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F151A; --surface:#161F26; --sunk:#1B262E; --ink:#E3E9EB; --muted:#8D9AA2; --line:#2A3640;
+  --accent:#86B6D8; --accent-ink:#0F151A; --accent-soft:#1D3343;
+  --win:#55C48F; --win-soft:#173327; --loss:#F07C72; --loss-soft:#3A1F1D; --warn:#EDB050; --warn-soft:#3A2C14; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.65;padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:760px;margin:0 auto}
+h1,h2,h3{text-wrap:balance;margin:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{padding-block:28px 14px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header.top h1{font-size:28px;font-weight:900;letter-spacing:.02em}
+header.top .sub{color:var(--muted);font-size:13px}
+.sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.sync.ok i{background:var(--win)} .sync.local i{background:var(--warn)}
+
+.strip{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px 10px;border-bottom:1px solid var(--line)}
+.strip .lab{font-size:11px;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;min-width:0}
+.kpi b{display:block;font-family:var(--f-num);font-size:20px;font-weight:600;line-height:1.2}
+.kpi span{font-size:11px;color:var(--muted)}
+.pos{color:var(--win)} .neg{color:var(--loss)}
+
+nav.tabs{display:flex;gap:4px;margin-block:16px 18px;overflow-x:auto}
+nav.tabs button{border:0;background:transparent;padding:8px 14px;border-radius:999px;color:var(--muted);font-weight:700;white-space:nowrap;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+
+.step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:14px;margin-bottom:12px}
+.step h2{font-size:16px;font-weight:700;display:flex;gap:10px;align-items:baseline}
+.step h2 .n{font-family:var(--f-num);color:var(--accent);font-size:13px}
+.step .hint{font-size:12.5px;color:var(--muted);margin-top:-8px}
+.field{display:grid;gap:6px;min-width:0}
+.field>label,.field>.lbl{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:5px 12px;font-size:13.5px;cursor:pointer;line-height:1.4}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.chip.up[aria-pressed="true"]{background:var(--win);border-color:var(--win);color:var(--surface)}
+.chip.down[aria-pressed="true"]{background:var(--loss);border-color:var(--loss);color:var(--surface)}
+input[type=text],input[type=date],input[type=number],textarea{width:100%;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{min-height:76px;resize:vertical;line-height:1.6}
+input[type=number]{font-family:var(--f-num)}
+.tfgrid{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.tfgrid .tfl{font-size:13px;font-weight:700;font-family:var(--f-num)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--muted);width:fit-content}
+.badge.with{background:var(--win-soft);color:var(--win)} .badge.against{background:var(--warn-soft);color:var(--warn)}
+.warnline{font-size:12.5px;color:var(--loss);font-weight:700}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:0;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn.danger{background:var(--loss);color:var(--surface)}
+.toast{font-size:13px;color:var(--win);font-weight:700}
+
+.list{display:grid;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.card summary{list-style:none;cursor:pointer;padding:12px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+.card summary::-webkit-details-marker{display:none}
+.res{font-size:12px;font-weight:700;border-radius:6px;padding:4px 8px;text-align:center;min-width:44px}
+.res.win{background:var(--win-soft);color:var(--win)} .res.loss{background:var(--loss-soft);color:var(--loss)} .res.be{background:var(--sunk);color:var(--muted)}
+.card .meta{min-width:0}
+.card .meta b{font-size:15px}
+.card .meta small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .rr{font-family:var(--f-num);font-weight:600;font-size:16px}
+.card .body{padding:0 14px 14px;display:grid;gap:10px;border-top:1px dashed var(--line);padding-top:12px}
+.kv{display:grid;grid-template-columns:7.5em 1fr;gap:4px 12px;font-size:13.5px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;white-space:pre-wrap;min-width:0}
+.ex{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:4px;margin-left:6px;vertical-align:2px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:28px 18px;text-align:center;color:var(--muted)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+
+.weeknav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.weeknav h2{font-size:17px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px;min-width:0}
+.panel h3{font-size:14px;margin-bottom:10px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+td.num{font-family:var(--f-num)}
+.bar{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.curve svg{width:100%;height:auto;display:block}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.qa{display:grid;gap:12px}
+.note{font-size:12.5px;color:var(--muted)}
+.lblrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.linkbtn{border:0;background:none;color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;padding:2px 4px}
+.pairmgr{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:10px}
+.pairmgr .chip{background:var(--surface);cursor:default;display:inline-flex;gap:6px;align-items:center}
+.pairmgr .chip button{border:0;background:none;color:var(--loss);font-weight:700;cursor:pointer;padding:0 2px;line-height:1}
+.addrow{display:flex;gap:8px}
+.addrow input{flex:1;min-width:0}
+.drop{display:grid;gap:2px;justify-items:center;text-align:center;border:1.5px dashed var(--line);border-radius:var(--r);padding:18px 12px;cursor:pointer;background:var(--sunk)}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{color:var(--accent)} .drop span{font-size:13px} .drop small{font-size:11.5px;color:var(--muted)}
+.media{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.media:empty{display:none}
+.mitem{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--sunk);min-width:0;display:grid}
+.mitem video,.mitem img{width:100%;max-width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;display:block}
+.mitem .cap{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px;font-size:12px}
+.mitem .cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mitem .cap button{border:0;background:none;color:var(--loss);font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap}
+.mitem.busy{place-items:center;aspect-ratio:16/9;color:var(--muted);font-size:13px}
+.vlink{word-break:break-all;color:var(--accent)}
+.striphead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.striphead .lab{margin:0}
+.seg.sm{margin:0;padding:2px}
+.seg.sm button{padding:3px 12px;font-size:12.5px}
+.raterow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;margin-bottom:6px}
+.raterow input{width:90px;padding:4px 8px;background:var(--surface);border:1px solid var(--line);border-radius:6px;font-family:var(--f-num)}
+.rrbox input{text-align:center}
+.presets{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ghostchip{background:transparent;border-style:dashed;font-size:12.5px}
+.combo{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;background:var(--sunk);border-radius:8px;padding:8px 12px}
+.combo b{font-size:14px}
+.pre{align-self:center;font-weight:700}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:12px}
+.seg button{border:0;background:none;padding:6px 18px;border-radius:999px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+td.wrap{white-space:normal;min-width:11em;text-align:left}
+.rank{font-family:var(--f-num);color:var(--muted);font-size:12px;margin-right:6px}
+.calsum{margin-bottom:12px}
+.calwrap{overflow-x:auto}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(44px,1fr));gap:4px;min-width:320px}
+.cal .dow{font-size:11.5px;font-weight:700;color:var(--muted);text-align:center;padding-block:2px}
+.cal .dow.sat{color:var(--accent)} .cal .dow.sun{color:var(--loss)}
+.cday{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-height:84px;padding:5px 6px;display:flex;flex-direction:column;gap:2px;cursor:pointer;text-align:left;min-width:0;font:inherit;color:inherit}
+.cday.out{opacity:.38}
+.cday.wkend{background:var(--sunk)}
+.cday.pos{background:var(--win-soft)} .cday.neg{background:var(--loss-soft)}
+.cday.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cday.sel{border-color:var(--ink);border-width:2px;padding:4px 5px}
+.cday .d{font-family:var(--f-num);font-size:12px;font-weight:600}
+.cday .r{font-family:var(--f-num);font-size:13px;font-weight:700;line-height:1.2}
+.cday .c{font-size:10.5px;color:var(--muted)}
+.tag{display:inline-block;font-style:normal;font-size:9.5px;font-weight:700;border-radius:4px;padding:0 4px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tag.hol{background:var(--warn-soft);color:var(--warn)} .tag.dst{background:var(--accent-soft);color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:12px;color:var(--muted);margin-block:10px 16px}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.lg{width:12px;height:12px;border-radius:3px;display:inline-block}
+.lg.win{background:var(--win-soft);border:1px solid var(--win)} .lg.loss{background:var(--loss-soft);border:1px solid var(--loss)}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.dayhead h3{font-size:16px}
+.evlist{display:grid;gap:6px;margin-bottom:10px}
+.evlist div{font-size:13px;padding:8px 10px;border-radius:8px;background:var(--sunk)}
+@media (max-width:520px){.cday{min-height:64px;padding:4px}.cday .c{display:none}.cday .r{font-size:11.5px}}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)} header.top h1{font-size:24px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>トレード日誌</h1>
+      <div class="sub">TJRブートキャンプ式・1トレード1ページ</div>
+    </div>
+    <div class="sync" id="sync"><i></i><span>接続中…</span></div>
+  </header>
+
+  <div class="strip">
+    <div class="striphead"><div class="lab" id="stripLab">今週</div>
+      <div class="seg sm" id="unitSeg" role="group" aria-label="損益の表示単位"><button type="button" data-unit="R">R</button><button type="button" data-unit="JPY">円</button><button type="button" data-unit="USD">ドル</button></div></div>
+    <div class="raterow" id="rateRow" hidden><label for="fxRate">換算レート　1ドル＝</label><input type="number" id="fxRate" step="0.01" min="1"><span>円</span><span class="note">（円とドルの記録をまとめて表示するときに使用）</span></div>
+    <div class="kpis">
+      <div class="kpi"><b class="num" id="kN">0</b><span>トレード数</span></div>
+      <div class="kpi"><b class="num" id="kW">–</b><span>勝率（建値除く）</span></div>
+      <div class="kpi"><b class="num" id="kR">0.0R</b><span>合計損益</span></div>
+      <div class="kpi"><b class="num" id="kP">–</b><span>プラン順守率</span></div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="new" aria-selected="true" id="tab-new">記録する</button>
+    <button role="tab" data-tab="log" aria-selected="false" id="tab-log">トレード一覧</button>
+    <button role="tab" data-tab="skip" aria-selected="false" id="tab-skip">見送り</button>
+    <button role="tab" data-tab="review" aria-selected="false" id="tab-review">統計</button>
+    <button role="tab" data-tab="cal" aria-selected="false" id="tab-cal">カレンダー</button>
+  </nav>
+
+  <!-- 記録する -->
+  <section data-panel="new">
+    <form id="tradeForm" autocomplete="off">
+      <div class="step">
+        <h2><span class="n">01</span>基本データ</h2>
+        <div class="hint">勝てるまではペアを1つに絞る。セッションはNYかロンドン。</div>
+        <div class="row">
+          <div class="field"><label for="f-date">日付</label><input type="date" id="f-date" required></div>
+          <div class="field"><span class="lbl">方向</span><div class="chips" data-field="dir"></div></div>
+        </div>
+        <div class="field"><div class="lblrow"><span class="lbl">ペア</span><button type="button" class="linkbtn" data-pairedit>銘柄を編集</button></div>
+          <div class="chips" data-field="pair"></div>
+          <div class="pairmgr" hidden>
+            <div class="note">× で一覧から外します（過去の記録はそのまま残ります）。</div>
+            <div class="chips" data-pairlist></div>
+            <div class="addrow"><input type="text" data-pairinput id="f-pairAdd" placeholder="追加する銘柄（例：AUDUSD）" maxlength="20"><button type="button" class="btn" data-pairadd>追加</button></div>
+            <div class="note" data-pairmsg></div>
+          </div></div>
+        <div class="field"><span class="lbl">セッション</span><div class="chips" data-field="session"></div></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="n">02</span>上位足の状況</h2>
+        <div class="hint">各時間足の直近のブレイク・オブ・ストラクチャーの向き。</div>
+        <div class="tfgrid" id="tfgrid"></div>
+        <div id="biasBadge" class="badge">方向と日足を選ぶと判定します</div>
+      </div>
+
+      <div class="step">
+        <h2><span class="n">03</span>コンフルエンス</h2>
+        <div class="field"><div class="lblrow"><span class="lbl">使った要素（当てはまるものを全部タップ）</span><button type="button" class="linkbtn" data-confedit>要素を編集</button></div>
+          <div class="presets"><span class="note">TJRの型から入れる：</span>
+            <button type="button" class="chip ghostchip" data-preset="0">① スイープ+BOS</button>
+            <button type="button" class="chip ghostchip" data-preset="1">② +OB</button>
+            <button type="button" class="chip ghostchip" data-preset="2">③ +FVG</button>
+            <button type="button" class="chip ghostchip" data-preset="3">④ +FVG+EQ</button></div>
+          <div class="chips" id="confChips"></div>
+          <div class="combo"><span class="note">組み合わせ</span><b id="comboPreview">まだ選んでいません</b></div>
+          <div class="pairmgr" data-confmgr hidden>
+            <div class="note">× で選択肢から外します（過去の記録と統計はそのまま）。並び順が組み合わせの表示順になります。</div>
+            <div class="chips" data-conflist></div>
+            <div class="addrow"><input type="text" data-confinput id="f-confAdd" placeholder="追加する要素（例：OTE）" maxlength="30"><button type="button" class="btn" data-confadd>追加</button></div>
+            <div class="note" data-confmsg></div>
+          </div></div>
+        <div class="field"><label for="f-reason">エントリー根拠</label>
+          <textarea id="f-reason" placeholder="どの足の、どのビルディングブロックで入ったか。上位足は何を示していたか。&#10;例：15分足でアジア高値をスイープ→5分足でBOS→FVGまで戻して売り"></textarea></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="n">04</span>リスクと結果</h2>
+        <div class="row">
+          <div class="field"><label for="f-risk">リスク（%）</label><input type="number" id="f-risk" step="0.1" min="0" max="10" placeholder="1.0"></div>
+          <div class="field"><label for="f-rrRisk">リスクリワード</label>
+            <div class="addrow rrbox"><input type="number" id="f-rrRisk" step="0.01" min="0.01" inputmode="decimal" aria-label="リスク側"><span class="pre">:</span><input type="number" id="f-rrReward" step="0.01" min="0" inputmode="decimal" placeholder="2.50" aria-label="リワード側"></div></div>
+        </div>
+        <div class="field"><label for="f-amt">損益（金額）</label>
+          <div class="addrow"><input type="number" id="f-amt" step="any" placeholder="+3000 / -1500">
+            <div class="seg sm" id="amtCur" role="group" aria-label="金額の通貨"><button type="button" data-cur="JPY">円</button><button type="button" data-cur="USD">ドル</button></div></div>
+          <div class="note" id="amtConv"></div></div>
+        <div id="riskWarn" class="warnline" hidden>リスクが3%を超えています。TJRの基準は1〜3%（理想は1%）。</div>
+        <div class="field"><span class="lbl">結果</span><div class="chips" data-field="result"></div></div>
+        <div class="note" id="rrCalc"></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="n">05</span>振り返り</h2>
+        <div class="field"><span class="lbl">プラン通りだった？</span><div class="chips" data-field="plan"></div></div>
+        <div class="field"><label for="f-planNote">なぜそう言える？／どこを破った？</label>
+          <textarea id="f-planNote" placeholder="守れた日も文章にする。例：スイープ→BOS→FVGまで待てた。デイリーバイアスにも沿っていた。"></textarea></div>
+        <div class="field"><span class="lbl">感情</span><div class="chips" data-field="emotion"></div></div>
+        <div class="field"><label for="f-emotionWhy">なぜそう感じた？</label>
+          <textarea id="f-emotionWhy" placeholder="例：TP1のあとも勢いよく伸びたので、まだ行くと思って欲が出た。"></textarea></div>
+        <div class="field"><label for="f-improve">改善点（勝っても必ず書く）</label>
+          <textarea id="f-improve" placeholder="例：TP2の手前の1時間足SSLをマークしていなかった。次は利確候補を先に全部引く。"></textarea></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="n">06</span>リキャップ動画・チャート画像</h2>
+        <div class="hint">自分で撮ったトレード振り返り動画やスクショを付けておくと、あとで同じ場面を見返せます。</div>
+        <div id="uploadBox" hidden>
+          <label class="drop" for="f-file" id="dropZone">
+            <b>ファイルを選ぶ</b><span>またはここにドラッグ</span>
+            <small>動画：MP4 / WebM、画像：PNG / JPEG。1ファイル20MBまで</small>
+          </label>
+          <input type="file" id="f-file" accept="video/mp4,video/webm,image/png,image/jpeg,image/webp" multiple hidden>
+        </div>
+        <div class="note" id="uploadOff" hidden>このページではファイルを添付できません（ダウンロード版など）。リキャップの回数だけ記録できます。</div>
+        <div class="media" id="formMedia"></div>
+        <div class="field" style="max-width:260px"><label for="f-recap">トレードリキャップ動画 第何回？</label>
+          <div class="addrow"><span class="pre">第</span><input type="number" id="f-recap" min="1" step="1" inputmode="numeric" placeholder="12"><span class="pre">回</span></div></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit" id="saveBtn">保存する</button>
+        <button class="btn ghost" type="button" id="resetBtn">クリア</button>
+        <span class="toast" id="toast" hidden></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- 一覧 -->
+  <section data-panel="log" hidden>
+    <div class="filters">
+      <div class="chips" id="logFilter"></div>
+    </div>
+    <div class="list" id="tradeList"></div>
+  </section>
+
+  <!-- 見送り -->
+  <section data-panel="skip" hidden>
+    <form id="skipForm" autocomplete="off">
+      <div class="step">
+        <h2>入らなかった日も書く</h2>
+        <div class="hint">その日の終わりに相場がどこへ向かったかを見て、判断が正しかったか確かめる。</div>
+        <div class="field" style="max-width:220px"><label for="s-date">日付</label><input type="date" id="s-date" required></div>
+        <div class="field"><span class="lbl">ペア</span><div class="chips" data-field="spair"></div></div>
+        <div class="tfgrid" id="stfgrid"></div>
+        <div class="field"><label for="s-why">見送った理由</label><textarea id="s-why" placeholder="例：日足・4Hは上昇なのに1Hが下落のBOS。足どうしが逆を向いていた。"></textarea></div>
+        <div class="field"><label for="s-after">その後の相場の動き</label><textarea id="s-after" placeholder="例：NY後半に1HのSSLを取ってから反転し、日足の方向へ伸びた。"></textarea></div>
+        <div class="field"><span class="lbl">判断は？</span><div class="chips" data-field="sverdict"></div></div>
+        <div class="field"><label for="s-lesson">見落としていたこと・学び</label><textarea id="s-lesson"></textarea></div>
+        <div class="actions"><button class="btn" type="submit" id="skipSave">保存する</button><button class="btn ghost" type="button" id="skipReset">クリア</button><span class="toast" id="skipToast" hidden></span></div>
+      </div>
+    </form>
+    <div class="list" id="skipList"></div>
+  </section>
+
+  <!-- 統計 -->
+  <section data-panel="review" hidden>
+    <div class="seg" id="perMode" role="group" aria-label="集計の期間">
+      <button type="button" data-mode="week" aria-pressed="true">週</button>
+      <button type="button" data-mode="month" aria-pressed="false">月</button>
+      <button type="button" data-mode="all" aria-pressed="false">全期間</button>
+    </div>
+    <div class="weeknav">
+      <button class="btn ghost" id="pPrev" type="button">← 前</button>
+      <h2 class="num" id="pTitle"></h2>
+      <button class="btn ghost" id="pNext" type="button">次 →</button>
+    </div>
+    <div class="two">
+      <div class="panel"><h3>数字</h3><div class="tbl"><table id="sumTable"></table></div></div>
+      <div class="panel"><h3>日足との関係</h3><div class="tbl"><table id="biasTable"></table></div>
+        <p class="note">逆張りで負けが続いていたら、上位足に逆らっていないか見直す。</p></div>
+    </div>
+    <div class="panel"><h3>組み合わせランキング</h3><div class="tbl"><table id="comboTable"></table></div>
+      <p class="note">回数の多い順。勝ち平均R＝勝ったときに平均何R取れたか（リスクリワード）。期待値＝1トレードあたりの平均R。プラスなら続ける価値のある組み合わせ。</p></div>
+    <div class="panel"><h3>要素ごと</h3><div class="tbl"><table id="elemTable"></table></div>
+      <p class="note">その要素を含むトレード全体の成績。</p></div>
+    <div class="panel"><h3>感情ごと</h3><div class="tbl"><table id="emoTable"></table></div></div>
+    <div class="panel curve"><h3>損益の推移（累計R）</h3><div id="curve"></div></div>
+    <div class="panel" id="reflectPanel"><h3 id="reflectTitle">今週の振り返り（文章で）</h3>
+      <div class="qa" id="weekQA"></div>
+      <p class="note" id="wkSaved">書き終えて欄の外をタップすると保存されます。</p>
+    </div>
+  </section>
+
+  <!-- カレンダー -->
+  <section data-panel="cal" hidden>
+    <div class="weeknav">
+      <button class="btn ghost" id="cPrev" type="button">← 前の月</button>
+      <h2 class="num" id="cTitle"></h2>
+      <button class="btn ghost" id="cNext" type="button">次の月 →</button>
+    </div>
+    <div class="kpis calsum" id="calSum"></div>
+    <div class="calwrap"><div class="cal" id="calGrid"></div></div>
+    <div class="legend"><span><i class="lg win"></i>勝ち越しの日</span><span><i class="lg loss"></i>負け越しの日</span><span><i class="tag hol">米休場</i>米国市場休み</span><span><i class="tag dst">夏時間</i>時間の切替</span><button type="button" class="linkbtn" id="cToday">今月に戻る</button></div>
+    <div id="calDay"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+const OPT = {
+  dir:["買い","売り"],
+  pair:["EURUSD","GBPUSD","USDJPY","GBPJPY","EURJPY","NAS100","US500"],
+  session:["NY","ロンドン","アジア"],
+  tf:["上昇","下落","レンジ"],
+  result:["勝ち","負け","建値"],
+  plan:["はい","いいえ"],
+  emotion:["冷静","恐怖","過信","欲","焦り","迷い"],
+  sverdict:["正しかった","間違っていた"],
+  spair:[],
+};
+const TFS = [["d","日足"],["h4","4H"],["h1","1H"],["m15","15分"]];
+const CONF_DEFAULT = ["Liquidity Sweep","BOS","MSS","Displacement","OB","FVG","IFVG","Breaker Block","Equilibrium","SMT Divergence"];
+const PRESETS = [["Liquidity Sweep","BOS"],["Liquidity Sweep","BOS","OB"],["Liquidity Sweep","BOS","FVG"],["Liquidity Sweep","BOS","FVG","Equilibrium"]];
+const LEGACY = {"①スイープ+BOS":PRESETS[0],"②+OB":PRESETS[1],"③+FVG":PRESETS[2],"④+FVG/OB+EQ":PRESETS[3]};
+const WEEKQ = [
+  ["keep","勝ちパターン：何がうまくいった？（続けること）"],
+  ["stop","負けパターン：同じ負け方をしていない？（やめること）"],
+  ["emo","感情で崩れた場面と、その理由"],
+  ["one","来週ひとつだけ直すこと"],
+];
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+let db = null, mode = "loading";
+const S = { trades:[], skips:[], weeks:{}, settings:{} };
+let editId = null, skipEditId = null, logFilter = "すべて";
+let assets = null, formMedia = [], pendingDelete = [];
+const fresh = new Set(), openCards = new Set();
+let formConf = [];
+const TRADE_FIELDS = ["dir","pair","session","result","plan","emotion",...["d","h4","h1","m15"].map(k=>"tf_"+k)];
+
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const monday = d => { const x = new Date(d); const k = (x.getDay()+6)%7; x.setDate(x.getDate()-k); return x; };
+const WD = ["日","月","火","水","木","金","土"];
+const nice = s => { if(!s) return ""; const d = parse(s); return `${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`; };
+let per = { mode:"week", anchor: monday(new Date()) };
+let unit = "R", amtCur = "JPY";
+try{ unit = localStorage.getItem("tj.unit") || "R"; amtCur = localStorage.getItem("tj.cur") || "JPY"; }catch(e){}
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = ymd(new Date());
+
+/* ---------- chips ---------- */
+const form = {};
+function fillChips(el, opts, cls){
+  el.innerHTML = opts.map(o => `<button type="button" class="chip ${cls?cls(o):""}" data-v="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join("");
+}
+function chipGroup(el, field, opts, cls){
+  fillChips(el, opts||[], cls);
+  el.addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if(!b) return;
+    const v = b.dataset.v;
+    form[field] = form[field] === v ? "" : v;
+    syncChips(); onFormChange();
+  });
+  el.dataset.field = field;
+}
+function syncChips(){
+  $$(".chips[data-field]").forEach(g => {
+    const f = g.dataset.field;
+    g.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(form[f] === b.dataset.v)));
+  });
+}
+const tfClass = o => o==="上昇"?"up":o==="下落"?"down":"";
+$$(".chips[data-field]").forEach(g => chipGroup(g, g.dataset.field, OPT[g.dataset.field],
+  g.dataset.field==="dir" ? (o=>o==="買い"?"up":"down") : g.dataset.field==="result" ? (o=>o==="勝ち"?"up":o==="負け"?"down":"") : null));
+function tfRows(gridId, prefix){
+  const g = $(gridId);
+  g.innerHTML = TFS.map(([k,l]) => `<div class="tfl">${l}</div><div class="chips" data-field="${prefix}${k}"></div>`).join("");
+  TFS.forEach(([k]) => { const el = g.querySelector(`[data-field="${prefix}${k}"]`); chipGroup(el, prefix+k, OPT.tf, tfClass); });
+}
+tfRows("#tfgrid","tf_");
+tfRows("#stfgrid","stf_");
+$("#stfgrid").querySelectorAll('[data-field="stf_m15"]').forEach(e => { e.previousElementSibling.remove(); e.remove(); });
+
+function biasOf(dir, d){
+  if(!dir || !d) return "";
+  if(d==="レンジ") return "レンジ";
+  return (dir==="買い"&&d==="上昇")||(dir==="売り"&&d==="下落") ? "順張り" : "逆張り";
+}
+function onFormChange(){
+  if(typeof renderRR==="function") renderRR();
+  const b = biasOf(form.dir, form.tf_d), el = $("#biasBadge");
+  el.className = "badge" + (b==="順張り"?" with":b==="逆張り"?" against":"");
+  el.textContent = b ? `日足に対して：${b}` + (b==="逆張り"?"（上位足に逆らっています）":"") : "方向と日足を選ぶと判定します";
+  const r = parseFloat($("#f-risk").value);
+  $("#riskWarn").hidden = !(r > 3);
+}
+$("#f-risk").addEventListener("input", onFormChange);
+
+/* ---------- editable lists (pairs, confluence elements) ---------- */
+function makeManager(o){
+  const get = () => (S.settings[o.key] && Array.isArray(S.settings[o.key].list)) ? S.settings[o.key].list : o.defaults;
+  const box=$(o.box), list=$(o.list), inp=$(o.input), msg=$(o.msg);
+  const say = t => { msg.textContent=t; };
+  async function save(next, t){ try{ await put("settings", o.key, {list:next}); say(t); }catch(err){ say("保存できませんでした（"+(err.code||"error")+"）"); } }
+  $(o.toggle).addEventListener("click", e => { box.hidden=!box.hidden; e.target.textContent = box.hidden ? o.label : "編集を閉じる"; });
+  $(o.add).addEventListener("click", () => { const v=o.norm(inp.value), cur=get(); if(!v) return;
+    if(cur.includes(v)){ say(v+" はすでにあります"); return; } inp.value=""; save([...cur,v], v+" を追加しました"); });
+  inp.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); $(o.add).click(); } });
+  list.addEventListener("click", e => { const b=e.target.closest("[data-rm]"); if(!b) return; const v=b.dataset.rm; save(get().filter(p=>p!==v), v+" を外しました"); });
+  function render(){ const cur=get();
+    list.innerHTML = cur.length ? cur.map(p => `<span class="chip">${esc(p)}<button type="button" data-rm="${esc(p)}" aria-label="${esc(p)}を外す">×</button></span>`).join("") : `<span class="note">まだありません。下から追加してください。</span>`; }
+  return {get, render};
+}
+const pairMgr = makeManager({key:"pairs", defaults:OPT.pair, toggle:"[data-pairedit]", box:".pairmgr", list:"[data-pairlist]", input:"[data-pairinput]", add:"[data-pairadd]", msg:"[data-pairmsg]", label:"銘柄を編集", norm:v=>v.trim().toUpperCase()});
+const confMgr = makeManager({key:"conf", defaults:CONF_DEFAULT, toggle:"[data-confedit]", box:"[data-confmgr]", list:"[data-conflist]", input:"[data-confinput]", add:"[data-confadd]", msg:"[data-confmsg]", label:"要素を編集", norm:v=>v.trim()});
+const pairList = () => pairMgr.get();
+/* order a set of elements by the current list order (unknown ones last) so the same set always reads the same */
+function canon(arr){ const order=confMgr.get(); const idx=v=>{ const i=order.indexOf(v); return i<0?999:i; };
+  return [...new Set(arr)].sort((a,b)=>idx(a)-idx(b)||a.localeCompare(b)); }
+const confOf = t => Array.isArray(t.conf) ? t.conf : (LEGACY[t.entry]||[]);
+const comboOf = t => { const c=canon(confOf(t)); return c.length ? c.join(" + ") : ""; };
+function renderConfChips(){
+  const opts=[...confMgr.get()]; formConf.forEach(v=>{ if(!opts.includes(v)) opts.push(v); });
+  $("#confChips").innerHTML = opts.map(o=>`<button type="button" class="chip" data-cv="${esc(o)}" aria-pressed="${formConf.includes(o)}">${esc(o)}</button>`).join("");
+  const c=canon(formConf); $("#comboPreview").textContent = c.length ? c.join(" + ") : "まだ選んでいません";
+}
+$("#confChips").addEventListener("click", e => { const b=e.target.closest("[data-cv]"); if(!b) return; const v=b.dataset.cv;
+  formConf = formConf.includes(v) ? formConf.filter(x=>x!==v) : [...formConf, v]; renderConfChips(); });
+$$("[data-preset]").forEach(b => b.addEventListener("click", () => { formConf=[...PRESETS[+b.dataset.preset]]; renderConfChips(); }));
+function renderPairChips(){
+  const base = pairList();
+  [["pair",'[data-field="pair"]'],["spair",'[data-field="spair"]']].forEach(([f,sel]) => {
+    const opts=[...base]; if(form[f] && !opts.includes(form[f])) opts.push(form[f]); fillChips($(sel), opts); });
+  pairMgr.render(); confMgr.render(); renderConfChips(); syncChips();
+}
+
+/* ---------- tabs ---------- */
+function showTab(t){
+  $$("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab===t)));
+  $$("section[data-panel]").forEach(s => s.hidden = s.dataset.panel !== t);
+  try{ localStorage.setItem("tj.tab", t); }catch(e){}
+}
+$$("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+try{ const t = localStorage.getItem("tj.tab"); if(t) showTab(t); }catch(e){}
+
+/* ---------- storage backend ---------- */
+const LKEY = "tj.data.v1";
+function localLoad(){ try{ const d = JSON.parse(localStorage.getItem(LKEY)||"{}"); S.trades=d.trades||[]; S.skips=d.skips||[]; S.weeks=d.weeks||{}; S.settings=d.settings||{}; }catch(e){} }
+function localSave(){ try{ localStorage.setItem(LKEY, JSON.stringify(S)); }catch(e){} }
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+async function put(coll, id, obj){
+  if(db){ await db.doc(`${coll}/${id}`).set(obj); }
+  else { const arr = S[coll];
+    if(!Array.isArray(arr)){ S[coll][id]={id,...obj}; } else { const i = arr.findIndex(x=>x.id===id); const row={id,...obj}; if(i>=0) arr[i]=row; else arr.push(row); }
+    localSave(); renderAll(); }
+}
+async function del(coll, id){
+  if(db){ await db.doc(`${coll}/${id}`).delete(); }
+  else { S[coll] = S[coll].filter(x=>x.id!==id); localSave(); renderAll(); }
+}
+function setSync(kind, text){ const el=$("#sync"); el.className="sync "+kind; el.querySelector("span").textContent=text; }
+
+async function boot(){
+  try{ db = window.claude ? await window.claude.use("db") : null; }catch(e){ db = null; }
+  try{ assets = window.claude ? await window.claude.use("assets") : null; }catch(e){ assets = null; }
+  $("#uploadBox").hidden = !assets; $("#uploadOff").hidden = !!assets;
+  if(db){
+    mode="db"; setSync("ok","保存先：クラウド（どの端末でも同じ）");
+    const sub = (coll, fn) => db.collection(coll).onSnapshot(s => { fn(s.docs.map(d => ({id:d.id, ...d.data()}))); renderAll(); },
+      e => setSync("local","同期エラー："+e.code));
+    sub("trades", a => S.trades=a);
+    sub("skips", a => S.skips=a);
+    sub("weeks", a => { S.weeks={}; a.forEach(w => S.weeks[w.id]=w); });
+    sub("settings", a => { S.settings={}; a.forEach(w => S.settings[w.id]=w); });
+  } else {
+    mode="local"; localLoad(); setSync("local","保存先：このブラウザのみ"); renderAll();
+  }
+}
+
+/* ---------- trade form ---------- */
+function clearForm(){
+  TRADE_FIELDS.forEach(k => form[k]="");
+  $("#f-date").value = ymd(new Date());
+  ["f-reason","f-risk","f-rrReward","f-amt","f-planNote","f-emotionWhy","f-improve","f-recap"].forEach(id => $("#"+id).value="");
+  $("#f-rrRisk").value="1"; formConf=[]; discardFresh(); formMedia=[]; pendingDelete=[]; renderFormMedia();
+  editId=null; $("#saveBtn").textContent="保存する"; renderPairChips(); onFormChange();
+}
+function fillForm(t){
+  clearForm(); editId=t.id;
+  $("#f-date").value=t.date||"";
+  formConf=[...confOf(t)];
+  Object.assign(form,{dir:t.dir||"",session:t.session||"",result:t.result||"",plan:t.plan||"",emotion:t.emotion||""});
+  form.pair=t.pair||"";
+  formMedia=(t.media||[]).map(m=>({...m})); $("#f-recap").value=t.recap??""; renderFormMedia();
+  TFS.forEach(([k]) => form["tf_"+k] = (t.tf||{})[k]||"");
+  $("#f-reason").value=t.reason||""; $("#f-risk").value=t.risk??""; const rr=rrOf(t); $("#f-rrRisk").value=rr?rr.risk:1; $("#f-rrReward").value=rr?rr.reward:""; $("#f-amt").value=t.amt??""; amtCur=t.cur||amtCur;
+  $("#f-planNote").value=t.planNote||""; $("#f-emotionWhy").value=t.emotionWhy||""; $("#f-improve").value=t.improve||"";
+  $("#saveBtn").textContent="変更を保存"; renderPairChips(); onFormChange(); showTab("new"); window.scrollTo({top:0});
+}
+function flash(el, msg){ el.textContent=msg; el.hidden=false; clearTimeout(el._t); el._t=setTimeout(()=>el.hidden=true, 2600); }
+$("#resetBtn").addEventListener("click", clearForm);
+$("#tradeForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const num = v => v===""?null:Number(v);
+  const t = {
+    date:$("#f-date").value, dir:form.dir||"", pair:form.pair||"", session:form.session||"",
+    tf:Object.fromEntries(TFS.map(([k])=>[k,form["tf_"+k]||""])),
+    conf:canon(formConf), reason:$("#f-reason").value.trim(),
+    risk:num($("#f-risk").value), rr:rrInput(), r:rFrom(rrInput(), form.result), amt:num($("#f-amt").value), cur:amtCur, result:form.result||"",
+    plan:form.plan||"", planNote:$("#f-planNote").value.trim(),
+    emotion:form.emotion||"", emotionWhy:$("#f-emotionWhy").value.trim(), improve:$("#f-improve").value.trim(),
+    media:formMedia.map(({id,name,type,size})=>({id,name,type,size})), recap:num($("#f-recap").value),
+    updatedAt:Date.now(),
+  };
+  const old = editId && S.trades.find(x=>x.id===editId);
+  if(old && old.example) t.example = true;
+  const id = editId || uid();
+  if($(".mitem.busy")){ flash($("#toast"),"アップロードが終わるまで待ってください"); return; }
+  try{ await put("trades", id, t); flash($("#toast"), editId?"変更を保存しました":"保存しました");
+    fresh.clear(); const gone=pendingDelete; pendingDelete=[]; gone.forEach(dropAsset); clearForm(); }
+  catch(err){ flash($("#toast"), "保存できませんでした（"+(err.code||"error")+"）。時間をおいてもう一度。"); }
+});
+
+/* ---------- skip form ---------- */
+function clearSkip(){
+  ["sverdict","spair",...TFS.map(([k])=>"stf_"+k)].forEach(k=>form[k]="");
+  $("#s-date").value=ymd(new Date()); ["s-why","s-after","s-lesson"].forEach(id=>$("#"+id).value="");
+  skipEditId=null; $("#skipSave").textContent="保存する"; renderPairChips();
+}
+$("#skipReset").addEventListener("click", clearSkip);
+$("#skipForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const s = { date:$("#s-date").value, pair:form.spair||"",
+    tf:{d:form.stf_d||"",h4:form.stf_h4||"",h1:form.stf_h1||""},
+    why:$("#s-why").value.trim(), after:$("#s-after").value.trim(), verdict:form.sverdict||"", lesson:$("#s-lesson").value.trim(), updatedAt:Date.now() };
+  const old = skipEditId && S.skips.find(x=>x.id===skipEditId); if(old && old.example) s.example=true;
+  try{ await put("skips", skipEditId||uid(), s); flash($("#skipToast"),"保存しました"); clearSkip(); }
+  catch(err){ flash($("#skipToast"),"保存できませんでした（"+(err.code||"error")+"）"); }
+});
+
+/* ---------- stats ---------- */
+const real = a => a.filter(t=>!t.example);
+function stats(arr){
+  const w=arr.filter(t=>t.result==="勝ち").length, l=arr.filter(t=>t.result==="負け").length, be=arr.filter(t=>t.result==="建値").length;
+  const p=arr.filter(t=>t.plan==="はい").length, pa=arr.filter(t=>t.plan).length;
+  const withR=arr.filter(t=>t.r!=null&&t.r!==""), wins=withR.filter(t=>t.result==="勝ち");
+  const R=withR.reduce((s,t)=>s+Number(t.r),0);
+  return { n:arr.length, w, l, be, wr:(w+l)?w/(w+l):null, R, pr:pa?p/pa:null,
+    exp: withR.length? R/withR.length : null, avgWin: wins.length? wins.reduce((s,t)=>s+Number(t.r),0)/wins.length : null };
+}
+const pct = v => v==null?"–":Math.round(v*100)+"%";
+const fR = v => v==null?"–":(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(2).replace(/0$/,"")+"R";
+const rCls = v => v>0?"pos":v<0?"neg":"";
+/* ---------- money ---------- */
+const fxRate = () => { const r=Number((S.settings.fx||{}).rate); return r>0 ? r : 150; };
+const conv = (v, from, to) => from===to ? v : (from==="USD" ? v*fxRate() : v/fxRate());
+const moneyOf = (t, cur) => (t.amt==null||t.amt==="") ? null : conv(Number(t.amt), t.cur||"JPY", cur);
+function fMoney(v, cur){ if(v==null) return "–"; const sign=v>0?"+":v<0?"−":""; const a=Math.abs(v);
+  return sign + (cur==="USD" ? "$"+a.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "¥"+Math.round(a).toLocaleString("ja-JP")); }
+const moneyCur = () => unit==="R" ? amtCur : unit;
+/* total of a set of trades in the chosen display unit */
+const uSum = arr => unit==="R" ? arr.reduce((s,t)=>s+(Number(t.r)||0),0) : arr.reduce((s,t)=>s+(moneyOf(t,unit)||0),0);
+const fU = v => unit==="R" ? fR(v) : fMoney(v, unit);
+const fTrade = t => { if(unit!=="R"){ const m=moneyOf(t,unit); if(m!=null) return fMoney(m,unit); }
+  return t.r==null||t.r==="" ? "" : fR(Number(t.r)); };
+const tVal = t => unit!=="R" && moneyOf(t,unit)!=null ? moneyOf(t,unit) : (Number(t.r)||0);
+const uLabel = () => unit==="R" ? "合計" : unit==="JPY" ? "合計（円）" : "合計（ドル）";
+function inWeek(t, ws){ if(!t.date) return false; const d=parse(t.date), e=new Date(ws); e.setDate(e.getDate()+7); return d>=ws && d<e; }
+
+function renderStrip(){
+  const wk = real(S.trades).filter(t=>inWeek(t, monday(new Date())));
+  const s = stats(wk);
+  $("#kN").textContent=s.n; $("#kW").textContent=pct(s.wr);
+  const tot=uSum(wk); const kR=$("#kR"); kR.textContent=fU(tot); kR.className="num "+rCls(tot);
+  $$("#unitSeg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.unit===unit)));
+  $("#rateRow").hidden = unit==="R";
+  if(document.activeElement!==$("#fxRate")) $("#fxRate").value = fxRate();
+  $("#kP").textContent=pct(s.pr);
+  const m=monday(new Date()), e=new Date(m); e.setDate(e.getDate()+6);
+  $("#stripLab").textContent=`今週 ${m.getMonth()+1}/${m.getDate()}〜${e.getMonth()+1}/${e.getDate()}`;
+}
+
+/* ---------- list ---------- */
+const resCls = r => r==="勝ち"?"win":r==="負け"?"loss":"be";
+function tradeCard(t, opts){
+  const b = biasOf(t.dir, (t.tf||{}).d);
+  const tf = TFS.map(([k,l])=>`${l}:${(t.tf||{})[k]||"–"}`).join("　");
+  const row = (k,v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "";
+  return `<details class="card" data-card="${t.id}" ${(opts&&opts.open)||openCards.has(t.id)?"open":""}><summary>
+    <span class="res ${resCls(t.result)}">${esc(t.result||"未入力")}</span>
+    <span class="meta"><b>${esc(t.pair||"—")}</b> <span class="note">${esc(t.dir||"")}</span>${t.example?'<span class="ex">記入例</span>':""}
+      <small>${[nice(t.date),esc(t.session||""),esc(comboOf(t)||"要素未入力"),b].filter(Boolean).join("・")}${mediaCount(t)}</small></span>
+    <span class="rr ${rCls(tVal(t))}">${fTrade(t)}</span></summary>
+    <div class="body"><dl class="kv">
+      ${row("コンフルエンス", comboOf(t))}${row("リキャップ", t.recap!=null?`第${t.recap}回`:"")}${row("上位足", tf)}${row("リスク", t.risk!=null?t.risk+"%":"")}${row("リスクリワード", fRR(rrOf(t)))}${row("損益", [t.r!=null&&t.r!==""?fR(Number(t.r)):"", t.amt!=null&&t.amt!==""?fMoney(Number(t.amt),t.cur||"JPY")+((t.cur||"JPY")==="JPY"?`（≈ ${fMoney(conv(Number(t.amt),"JPY","USD"),"USD")}）`:`（≈ ${fMoney(conv(Number(t.amt),"USD","JPY"),"JPY")}）`):""].filter(Boolean).join("　"))}${row("エントリー根拠", t.reason)}
+      ${row("プラン通り", t.plan)}${row("理由／破った点", t.planNote)}${row("感情", t.emotion)}${row("なぜ", t.emotionWhy)}${row("改善点", t.improve)}
+    </dl>
+    ${(t.media&&t.media.length)?`<div class="media">${t.media.map(m=>mediaItem(m,false)).join("")}</div>`:""}
+
+    <div class="actions"><button class="btn ghost" type="button" data-edit="${t.id}">編集</button>
+      <button class="btn ghost" type="button" data-del="${t.id}" data-coll="trades">削除</button></div></div></details>`;
+}
+function renderList(){
+  const f = $("#logFilter");
+  const opts=["すべて","勝ち","負け","建値","プラン外","逆張り"];
+  f.innerHTML = opts.map(o=>`<button type="button" class="chip" aria-pressed="${o===logFilter}" data-f="${o}">${o}</button>`).join("");
+  let arr=[...S.trades].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.updatedAt||0)-(a.updatedAt||0));
+  if(logFilter==="プラン外") arr=arr.filter(t=>t.plan==="いいえ");
+  else if(logFilter==="逆張り") arr=arr.filter(t=>biasOf(t.dir,(t.tf||{}).d)==="逆張り");
+  else if(logFilter!=="すべて") arr=arr.filter(t=>t.result===logFilter);
+  $("#tradeList").innerHTML = arr.length ? arr.map(t=>tradeCard(t)).join("")
+    : `<div class="empty">${S.trades.length?"この条件のトレードはありません。":"まだ記録がありません。<br>「記録する」タブから最初のトレードを書きましょう。"}</div>`;
+}
+$("#logFilter").addEventListener("click", e => { const b=e.target.closest("[data-f]"); if(b){ logFilter=b.dataset.f; renderList(); } });
+
+function skipCard(s){
+  const row = (k,v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "";
+  const tf = [["d","日足"],["h4","4H"],["h1","1H"]].map(([k,l])=>`${l}:${(s.tf||{})[k]||"–"}`).join("　");
+  const vc = s.verdict==="正しかった"?"win":s.verdict==="間違っていた"?"loss":"be";
+  return `<details class="card"><summary>
+    <span class="res ${vc}">${s.verdict==="正しかった"?"正解":s.verdict==="間違っていた"?"不正解":"未判定"}</span>
+    <span class="meta"><b>${esc(s.pair||"—")}</b>${s.example?'<span class="ex">記入例</span>':""}<small>${nice(s.date)}・見送り</small></span><span></span></summary>
+    <div class="body"><dl class="kv">${row("上位足",tf)}${row("見送った理由",s.why)}${row("その後",s.after)}${row("学び",s.lesson)}</dl>
+    <div class="actions"><button class="btn ghost" type="button" data-sedit="${s.id}">編集</button>
+    <button class="btn ghost" type="button" data-del="${s.id}" data-coll="skips">削除</button></div></div></details>`;
+}
+function renderSkips(){
+  const arr=[...S.skips].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  $("#skipList").innerHTML = arr.length ? arr.map(skipCard).join("") : `<div class="empty">見送りの記録はまだありません。</div>`;
+}
+document.addEventListener("click", async e => {
+  const ed=e.target.closest("[data-edit]"); if(ed){ const t=S.trades.find(x=>x.id===ed.dataset.edit); if(t) fillForm(t); return; }
+  const se=e.target.closest("[data-sedit]"); if(se){ const s=S.skips.find(x=>x.id===se.dataset.sedit); if(s){ clearSkip(); skipEditId=s.id;
+    $("#s-date").value=s.date||""; form.spair=s.pair||""; $("#s-why").value=s.why||""; $("#s-after").value=s.after||""; $("#s-lesson").value=s.lesson||"";
+    form.sverdict=s.verdict||""; ["d","h4","h1"].forEach(k=>form["stf_"+k]=(s.tf||{})[k]||""); renderPairChips(); $("#skipSave").textContent="変更を保存"; window.scrollTo({top:0}); } return; }
+  const d=e.target.closest("[data-del]"); if(d){
+    if(d.dataset.armed!=="1"){ d.dataset.armed="1"; d.textContent="もう一度押すと削除"; d.classList.add("danger"); d.classList.remove("ghost");
+      setTimeout(()=>{ if(d.isConnected){ d.dataset.armed=""; d.textContent="削除"; d.classList.remove("danger"); d.classList.add("ghost"); } },3000); return; }
+    const tr = d.dataset.coll==="trades" ? S.trades.find(x=>x.id===d.dataset.del) : null;
+    try{ await del(d.dataset.coll, d.dataset.del); (tr&&tr.media||[]).forEach(m=>dropAsset(m.id)); }catch(err){ d.textContent="削除できませんでした"; }
+  }
+});
+
+/* ---------- media ---------- */
+const ACCEPT = ["video/mp4","video/webm","image/png","image/jpeg","image/webp"];
+const MAX = 20*1024*1024;
+const mb = n => (n/1048576).toFixed(1)+"MB";
+const mediaCount = t => { const m=t.media||[]; const v=m.filter(x=>x.type&&x.type.startsWith("video")).length, i=m.length-v;
+  return (v?`・動画${v}`:"")+(i?`・画像${i}`:"")+(t.recap!=null?`・リキャップ第${t.recap}回`:""); };
+function mediaItem(m, removable){
+  const src = "/_blob/"+encodeURIComponent(m.id);
+  const el = (m.type||"").startsWith("video") ? `<video controls playsinline preload="metadata" src="${src}"></video>` : `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="${esc(m.name)}" loading="lazy"></a>`;
+  return `<div class="mitem">${el}<div class="cap"><span title="${esc(m.name)}">${esc(m.name)}・${mb(m.size||0)}</span>${removable?`<button type="button" data-mrm="${esc(m.id)}">外す</button>`:""}</div></div>`;
+}
+const uploadMsg = document.createElement("div"); uploadMsg.className="warnline"; uploadMsg.hidden=true; $("#formMedia").after(uploadMsg);
+function umsg(t){ uploadMsg.textContent=t; uploadMsg.hidden=!t; }
+let uploading = 0;
+function renderFormMedia(){
+  $("#formMedia").innerHTML = formMedia.map(m=>mediaItem(m,true)).join("") + Array.from({length:uploading},()=>`<div class="mitem busy">アップロード中…</div>`).join("");
+}
+async function dropAsset(id){ if(!assets||!id) return; try{ await assets.delete(id); }catch(e){} }
+function discardFresh(){ fresh.forEach(id=>dropAsset(id)); fresh.clear(); }
+async function handleFiles(list){
+  if(!assets) return;
+  umsg("");
+  for(const f of list){
+    if(!ACCEPT.includes(f.type)){ umsg(`${f.name}：この形式は添付できません。動画はMP4かWebM、画像はPNGかJPEGにしてください（iPhoneの.movはMP4に書き出し）。`); continue; }
+    if(f.size>MAX){ umsg(`${f.name} は ${mb(f.size)} あります。20MBまでなので、圧縮するかYouTube限定公開のリンクを貼ってください。`); continue; }
+    uploading++; renderFormMedia();
+    try{
+      const r = await assets.upload(f, {type:f.type});
+      formMedia.push({id:r.id, name:f.name, type:r.contentType, size:r.sizeBytes}); fresh.add(r.id);
+    }catch(err){
+      const c=err&&err.code;
+      umsg(c==="too_large"?`${f.name} が大きすぎます（20MBまで）。`:c==="unsupported_type"?`${f.name}：この形式は添付できません。`:c==="quota_or_state"?"保存容量がいっぱいです。古い添付を外してください。":`${f.name} をアップロードできませんでした（${c||"error"}）。もう一度試してください。`);
+    }finally{ uploading--; renderFormMedia(); }
+  }
+}
+$("#f-file").addEventListener("change", e => { handleFiles([...e.target.files]); e.target.value=""; });
+const dz=$("#dropZone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handleFiles([...e.dataTransfer.files]); });
+$("#formMedia").addEventListener("click", e => {
+  const b=e.target.closest("[data-mrm]"); if(!b) return;
+  const id=b.dataset.mrm; formMedia=formMedia.filter(m=>m.id!==id);
+  if(fresh.has(id)){ fresh.delete(id); dropAsset(id); } else pendingDelete.push(id);
+  renderFormMedia();
+});
+$("#tradeList").addEventListener("toggle", e => { const c=e.target.closest("[data-card]"); if(!c) return; c.open?openCards.add(c.dataset.card):openCards.delete(c.dataset.card); }, true);
+
+/* ---------- review ---------- */
+function tableRows(head, rows){ return `<thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody>`; }
+const HEAD = () => ["","回数","勝率","","勝ち平均R","期待値",uLabel()];
+function statRow(label, arr, rank){
+  const s=stats(arr);
+  return `<tr><td class="wrap">${rank?`<span class="rank">${rank}</span>`:""}${esc(label)}</td><td class="num">${s.n}</td><td class="num">${pct(s.wr)}</td>
+    <td><div class="bar"><i style="width:${s.wr==null?0:Math.round(s.wr*100)}%"></i></div></td>
+    <td class="num">${fR(s.avgWin)}</td><td class="num ${rCls(s.exp)}">${fR(s.exp)}</td><td class="num ${rCls(uSum(arr))}">${s.n?fU(uSum(arr)):"–"}</td></tr>`;
+}
+const emptyRow = t => `<tr><td colspan="7" class="wrap note">${t}</td></tr>`;
+function groupTable(key, opts, arr){ return tableRows(HEAD(), opts.map(o => statRow(o, arr.filter(t=>key(t)===o)))); }
+function perRange(){
+  if(per.mode==="all") return null;
+  if(per.mode==="week"){ const s=monday(per.anchor), e=new Date(s); e.setDate(e.getDate()+7); return {s,e}; }
+  const s=new Date(per.anchor.getFullYear(), per.anchor.getMonth(), 1); return {s, e:new Date(s.getFullYear(), s.getMonth()+1, 1)};
+}
+const inR = (t,r) => { if(!r) return true; if(!t.date) return false; const d=parse(t.date); return d>=r.s && d<r.e; };
+function perTitle(r){
+  if(!r) return "全期間";
+  if(per.mode==="month") return `${r.s.getFullYear()}年${r.s.getMonth()+1}月`;
+  const e=new Date(r.e); e.setDate(e.getDate()-1);
+  return `${r.s.getFullYear()}/${r.s.getMonth()+1}/${r.s.getDate()} 〜 ${e.getMonth()+1}/${e.getDate()}`;
+}
+function renderReview(){
+  const r=perRange();
+  $$("#perMode button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.mode===per.mode)));
+  $("#pPrev").hidden=$("#pNext").hidden=!r;
+  $("#pTitle").textContent=perTitle(r);
+  const arr=real(S.trades).filter(t=>inR(t,r)), s=stats(arr);
+  const planYes=stats(arr.filter(t=>t.plan==="はい")), planNo=stats(arr.filter(t=>t.plan==="いいえ"));
+  const over=arr.filter(t=>Number(t.risk)>3).length, sk=real(S.skips).filter(t=>inR(t,r));
+  const row=(k,v,c="")=>`<tr><td>${k}</td><td class="num ${c}">${v}</td></tr>`;
+  $("#sumTable").innerHTML = `<tbody>${row("トレード数",s.n)}${row("勝ち／負け／建値",`${s.w} / ${s.l} / ${s.be}`)}${row("勝率（建値除く）",pct(s.wr))}
+    ${row("合計損益（R）",fR(s.R),rCls(s.R))}${(()=>{ const c=moneyCur(), v=arr.reduce((a,t)=>a+(moneyOf(t,c)||0),0), n=arr.filter(t=>t.amt!=null&&t.amt!=="").length;
+      return row(`合計損益（${c==="JPY"?"円":"ドル"}）`, n?fMoney(v,c):"–", rCls(v)); })()}${row("勝ち平均R",fR(s.avgWin))}${row("期待値（1回あたり）",fR(s.exp),rCls(s.exp))}
+    ${row("プラン通りの勝率",pct(planYes.wr))}${row("プラン外の勝率",pct(planNo.wr))}${row("リスク3%超え",over+"回",over?"neg":"")}
+    ${row("見送り（正解／記録）",`${sk.filter(x=>x.verdict==="正しかった").length} / ${sk.length}`)}</tbody>`;
+  $("#biasTable").innerHTML = tableRows(["","回数","勝率","",uLabel()], ["順張り","逆張り","レンジ"].map(o=>{ const g=arr.filter(t=>biasOf(t.dir,(t.tf||{}).d)===o), q=stats(g);
+    return `<tr><td>${o}</td><td class="num">${q.n}</td><td class="num">${pct(q.wr)}</td><td><div class="bar"><i style="width:${q.wr==null?0:Math.round(q.wr*100)}%"></i></div></td><td class="num ${rCls(uSum(g))}">${q.n?fU(uSum(g)):"–"}</td></tr>`; }));
+  // combos ranked
+  const by={}; arr.forEach(t=>{ const k=comboOf(t); if(k) (by[k]=by[k]||[]).push(t); });
+  const combos=Object.entries(by).sort((a,b)=>b[1].length-a[1].length || stats(b[1]).R-stats(a[1]).R);
+  const noConf=arr.filter(t=>!comboOf(t)).length;
+  $("#comboTable").innerHTML = tableRows(["組み合わせ","回数","勝率","","勝ち平均R","期待値",uLabel()],
+    combos.length ? combos.map(([k,g],i)=>statRow(k,g,i+1)).concat(noConf?[emptyRow(`要素が未入力のトレード：${noConf}件`)]:[]) : [emptyRow("この期間に要素を記録したトレードはありません。")]);
+  const elems=[...new Set([...confMgr.get(), ...arr.flatMap(t=>canon(confOf(t)))])];
+  const elemRows=elems.map(el=>[el, arr.filter(t=>confOf(t).includes(el))]).filter(([,g])=>g.length).sort((a,b)=>b[1].length-a[1].length);
+  $("#elemTable").innerHTML = tableRows(["要素","回数","勝率","","勝ち平均R","期待値",uLabel()], elemRows.length ? elemRows.map(([k,g])=>statRow(k,g)) : [emptyRow("まだデータがありません。")]);
+  $("#emoTable").innerHTML = groupTable(t=>t.emotion, OPT.emotion, arr);
+  renderCurve(arr);
+  // reflection
+  const panel=$("#reflectPanel"); panel.hidden=!r; if(!r) return;
+  const key = per.mode==="week" ? ymd(r.s) : `m${r.s.getFullYear()}-${pad(r.s.getMonth()+1)}`;
+  $("#reflectTitle").textContent = per.mode==="week" ? "この週の振り返り（文章で）" : "この月の振り返り（文章で）";
+  const w=S.weeks[key]||{}, qa=$("#weekQA");
+  if(qa.dataset.week!==key){
+    qa.dataset.week=key;
+    qa.innerHTML = WEEKQ.map(([k,l])=>`<div class="field"><label for="wq-${k}">${per.mode==="month"?l.replace("来週","来月"):l}</label><textarea id="wq-${k}" data-k="${k}">${esc(w[k]||"")}</textarea></div>`).join("");
+  } else {
+    WEEKQ.forEach(([k])=>{ const el=$("#wq-"+k); if(el && document.activeElement!==el && el.value!==(w[k]||"")) el.value=w[k]||""; });
+  }
+}
+$("#weekQA").addEventListener("focusout", async e => {
+  const el=e.target.closest("textarea"); if(!el) return;
+  const key=$("#weekQA").dataset.week, cur=S.weeks[key]||{}, k=el.dataset.k, v=el.value.trim();
+  if((cur[k]||"")===v) return;
+  const next={...cur, [k]:v}; delete next.id;
+  try{ await put("weeks", key, next); flash($("#wkSaved"),"保存しました"); setTimeout(()=>{ $("#wkSaved").hidden=false; $("#wkSaved").textContent="書き終えて欄の外をタップすると保存されます。"; },2700); }
+  catch(err){ flash($("#wkSaved"),"保存できませんでした"); }
+});
+$("#perMode").addEventListener("click", e => { const b=e.target.closest("[data-mode]"); if(!b) return; per.mode=b.dataset.mode; per.anchor=new Date(); renderReview(); });
+function shiftPer(n){ const a=new Date(per.anchor); if(per.mode==="week") a.setDate(a.getDate()+7*n); else { a.setDate(1); a.setMonth(a.getMonth()+n); } per.anchor=a; renderReview(); }
+$("#pPrev").addEventListener("click",()=>shiftPer(-1));
+$("#pNext").addEventListener("click",()=>shiftPer(1));
+
+/* ---------- market calendar (rule-based, any year) ---------- */
+const addD = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const nthDow = (y,m,dow,n) => { const f=new Date(y,m,1); return new Date(y,m,1+((dow-f.getDay()+7)%7)+7*(n-1)); };
+const lastDow = (y,m,dow) => { const l=new Date(y,m+1,0); return new Date(y,m,l.getDate()-((l.getDay()-dow+7)%7)); };
+const obs = d => d.getDay()===6 ? addD(d,-1) : d.getDay()===0 ? addD(d,1) : d;
+function easter(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1; return new Date(y,mo-1,da); }
+const _evCache = {};
+function marketEvents(y){
+  if(_evCache[y]) return _evCache[y];
+  const ev = {}, add = (d,o) => { const k=ymd(d); (ev[k]=ev[k]||[]).push(o); };
+  const H = (d,name,fx) => add(d,{kind:"hol",short:"米休場",text:`米国市場休場：${name}。NAS100・US500は休み${fx?"、FXも多くの業者が休場":"、FXも薄商い"}`});
+  const ny=new Date(y,0,1); if(ny.getDay()!==6) H(obs(ny),"元日",true);
+  H(nthDow(y,0,1,3),"キング牧師記念日");
+  H(nthDow(y,1,1,3),"大統領の日");
+  H(addD(easter(y),-2),"聖金曜日（グッドフライデー）",true);
+  H(lastDow(y,4,1),"メモリアルデー");
+  H(obs(new Date(y,5,19)),"ジューンティーンス");
+  H(obs(new Date(y,6,4)),"独立記念日");
+  H(nthDow(y,8,1,1),"レイバーデー");
+  H(nthDow(y,10,4,4),"感謝祭");
+  H(obs(new Date(y,11,25)),"クリスマス",true);
+  add(nthDow(y,2,0,2),{kind:"dst",short:"米夏時間",text:"米国が夏時間に切替。日足の始まりは日本時間 朝6:00、NYオープンは22:30に"});
+  add(nthDow(y,10,0,1),{kind:"dst",short:"米冬時間",text:"米国が冬時間に切替。日足の始まりは日本時間 朝7:00、NYオープンは23:30に"});
+  add(lastDow(y,2,0),{kind:"dst",short:"英夏時間",text:"英国が夏時間に切替。ロンドン時間の始まりは日本時間16:00頃に"});
+  add(lastDow(y,9,0),{kind:"dst",short:"英冬時間",text:"英国が冬時間に切替。ロンドン時間の始まりは日本時間17:00頃に"});
+  return _evCache[y]=ev;
+}
+
+/* ---------- calendar ---------- */
+function renderCal(){
+  const y=calMonth.getFullYear(), m=calMonth.getMonth();
+  $("#cTitle").textContent=`${y}年${m+1}月`;
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const start=monday(first), end=addD(monday(last),7);
+  const trades=real(S.trades), skips=real(S.skips);
+  const byDay={}; trades.forEach(t=>{ if(t.date) (byDay[t.date]=byDay[t.date]||[]).push(t); });
+  const skDay={}; skips.forEach(t=>{ if(t.date) (skDay[t.date]=skDay[t.date]||[]).push(t); });
+  const today=ymd(new Date());
+  let h=["月","火","水","木","金","土","日"].map((d,i)=>`<div class="dow ${i===5?"sat":i===6?"sun":""}">${d}</div>`).join("");
+  for(let d=new Date(start); d<end; d=addD(d,1)){
+    const k=ymd(d), list=byDay[k]||[], R=uSum(list), ev=(marketEvents(d.getFullYear())[k]||[]);
+    const cls=["cday", d.getMonth()!==m?"out":"", (d.getDay()===0||d.getDay()===6)?"wkend":"", list.length?(R>0?"pos":R<0?"neg":""):"", k===today?"today":"", k===calSel?"sel":""].filter(Boolean).join(" ");
+    h+=`<button type="button" class="${cls}" data-day="${k}" aria-label="${d.getMonth()+1}月${d.getDate()}日${list.length?` ${list.length}件 ${fU(R)}`:""}">
+      <span class="d">${d.getDate()}</span>
+      ${list.length?`<span class="r ${rCls(R)}">${fU(R)}</span><span class="c">${list.length}件</span>`:""}
+      ${(skDay[k]||[]).length?`<span class="c">見送り${skDay[k].length}</span>`:""}
+      ${ev.map(e=>`<i class="tag ${e.kind}">${e.short}</i>`).join("")}</button>`;
+  }
+  $("#calGrid").innerHTML=h;
+  const mt=trades.filter(t=>{ if(!t.date) return false; const d=parse(t.date); return d>=first && d<=last; }), s=stats(mt);
+  const days=Object.keys(byDay).filter(k=>{ const d=parse(k); return d>=first&&d<=last; });
+  const dayR=k=>uSum(byDay[k]);
+  const wd=days.filter(k=>dayR(k)>0).length, ld=days.filter(k=>dayR(k)<0).length;
+  $("#calSum").innerHTML = `<div class="kpi"><b class="num">${s.n}</b><span>トレード数</span></div>
+    <div class="kpi"><b class="num">${pct(s.wr)}</b><span>勝率</span></div>
+    <div class="kpi"><b class="num ${rCls(uSum(mt))}">${fU(uSum(mt))}</b><span>月の合計</span></div>
+    <div class="kpi"><b class="num">${wd}<small style="font-size:12px;color:var(--muted)"> 勝 / </small>${ld}<small style="font-size:12px;color:var(--muted)"> 負</small></b><span>勝ち日 / 負け日</span></div>`;
+  // selected day detail
+  const sd=parse(calSel), sl=byDay[calSel]||[], ss=skDay[calSel]||[], sev=marketEvents(sd.getFullYear())[calSel]||[];
+  const sR=uSum(sl);
+  $("#calDay").innerHTML = `<div class="panel"><div class="dayhead"><h3>${sd.getFullYear()}年${nice(calSel)}</h3>${sl.length?`<b class="num ${rCls(sR)}">${sl.length}件・${fU(sR)}</b>`:""}</div>
+    ${sev.length?`<div class="evlist">${sev.map(e=>`<div><i class="tag ${e.kind}">${e.short}</i> ${esc(e.text)}</div>`).join("")}</div>`:""}
+    ${sl.length?`<div class="list">${sl.map(t=>tradeCard(t)).join("")}</div>`:`<p class="note">この日のトレード記録はありません。</p>`}
+    ${ss.length?`<div class="list" style="margin-top:10px">${ss.map(skipCard).join("")}</div>`:""}</div>`;
+}
+$("#calGrid").addEventListener("click", e => { const b=e.target.closest("[data-day]"); if(!b) return; calSel=b.dataset.day;
+  const d=parse(calSel); if(d.getMonth()!==calMonth.getMonth()) calMonth=new Date(d.getFullYear(), d.getMonth(), 1); renderCal(); });
+function shiftCal(n){ calMonth=new Date(calMonth.getFullYear(), calMonth.getMonth()+n, 1); renderCal(); }
+$("#cPrev").addEventListener("click",()=>shiftCal(-1));
+$("#cNext").addEventListener("click",()=>shiftCal(1));
+$("#cToday").addEventListener("click",()=>{ const n=new Date(); calMonth=new Date(n.getFullYear(), n.getMonth(), 1); calSel=ymd(n); renderCal(); });
+$("#calDay").addEventListener("toggle", e => { const c=e.target.closest("[data-card]"); if(!c) return; c.open?openCards.add(c.dataset.card):openCards.delete(c.dataset.card); }, true);
+
+function renderCurve(all){
+  const arr=[...all].filter(t=>t.r!=null&&t.date).sort((a,b)=>a.date.localeCompare(b.date)||(a.updatedAt||0)-(b.updatedAt||0));
+  const el=$("#curve");
+  if(arr.length<2){ el.innerHTML=`<p class="note">2トレード以上記録すると、累計Rの線が出ます。</p>`; return; }
+  let c=0; const pts=[0,...arr.map(t=>c+=Number(t.r)||0)];
+  const W=640,H=180,P={l:44,r:14,t:14,b:24};
+  const mn=Math.min(0,...pts), mx=Math.max(0,...pts), span=(mx-mn)||1;
+  const x=i=>P.l+i*(W-P.l-P.r)/(pts.length-1), y=v=>P.t+(mx-v)*(H-P.t-P.b)/span;
+  const step=span>12?5:span>5?2:1, ticks=[]; for(let v=Math.ceil(mn/step)*step; v<=mx; v+=step) ticks.push(v);
+  const line=pts.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const last=pts[pts.length-1];
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="累計損益 ${fR(last)}">
+    ${ticks.map(v=>`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v===0?1.5:1}" ${v===0?"":'stroke-dasharray="3 4"'}/>
+      <text x="${P.l-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${v>0?"+":""}${v}R</text>`).join("")}
+    <polygon points="${x(0)},${y(0)} ${line} ${x(pts.length-1)},${y(0)}" fill="var(--accent-soft)" opacity=".7"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(pts.length-1)}" cy="${y(last)}" r="4" fill="var(--accent)"/>
+    <text x="${Math.min(x(pts.length-1), W-P.r-4)}" y="${Math.max(y(last)-10, 12)}" text-anchor="end" font-size="12" font-weight="600" fill="var(--ink)" font-family="IBM Plex Mono, monospace">${fR(last)}</text>
+    <text x="${P.l}" y="${H-6}" font-size="11" fill="var(--muted)">${nice(arr[0].date)}</text>
+    <text x="${W-P.r}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--muted)">${nice(arr[arr.length-1].date)}・${arr.length}トレード</text></svg>`;
+}
+
+/* ---------- risk:reward ---------- */
+const r2 = v => Math.round(v*100)/100;
+function rrInput(){ const a=Number($("#f-rrRisk").value), b=$("#f-rrReward").value;
+  if(!(a>0) || b==="" || !(Number(b)>=0)) return null; return {risk:r2(a), reward:r2(Number(b))}; }
+/* realised R from the ratio and the result: win = reward/risk, loss = -1, breakeven = 0 */
+function rFrom(rr, res){ if(res==="負け") return -1; if(res==="建値") return 0; if(res==="勝ち" && rr) return r2(rr.reward/rr.risk); return null; }
+const rrOf = t => (t.rr && t.rr.risk>0) ? t.rr : (Number(t.r)>0 ? {risk:1, reward:r2(Number(t.r))} : null);
+const fRR = rr => rr ? `${+rr.risk.toFixed(2)} : ${+rr.reward.toFixed(2)}` : "";
+function renderRR(){
+  const rr=rrInput(), res=form.result, r=rFrom(rr,res);
+  $("#rrCalc").textContent = !rr ? "例：1 : 2.5（小数第2位まで）。結果を選ぶと損益R を自動で計算します。"
+    : `比率 ${(rr.reward/rr.risk).toFixed(2)}倍。` + (r==null ? "結果を選ぶと損益R を計算します。" : `この結果の損益は ${fR(r)}（勝ち→+比率、負け→−1R、建値→0R）`);
+}
+["f-rrRisk","f-rrReward"].forEach(id => $("#"+id).addEventListener("input", renderRR));
+["f-rrRisk","f-rrReward"].forEach(id => $("#"+id).addEventListener("blur", e => { if(e.target.value!=="" && Number(e.target.value)>=0) e.target.value = r2(Number(e.target.value)); renderRR(); }));
+function renderAmt(){
+  $$("#amtCur button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.cur===amtCur)));
+  const v=$("#f-amt").value; const o=amtCur==="JPY"?"USD":"JPY";
+  $("#amtConv").textContent = v==="" ? `R とは別に、実際の損益を${amtCur==="JPY"?"円":"ドル"}で記録できます。` : `≈ ${fMoney(conv(Number(v),amtCur,o),o)}（1ドル＝${fxRate()}円で換算）`;
+}
+$("#amtCur").addEventListener("click", e => { const b=e.target.closest("[data-cur]"); if(!b) return; amtCur=b.dataset.cur; try{ localStorage.setItem("tj.cur",amtCur); }catch(_){} renderAmt(); });
+$("#f-amt").addEventListener("input", renderAmt);
+$("#unitSeg").addEventListener("click", e => { const b=e.target.closest("[data-unit]"); if(!b) return; unit=b.dataset.unit; try{ localStorage.setItem("tj.unit",unit); }catch(_){} renderAll(); });
+$("#fxRate").addEventListener("change", async e => { const v=Number(e.target.value); if(!(v>0)) return; try{ await put("settings","fx",{rate:v}); }catch(_){} renderAll(); });
+function renderAll(){ renderAmt(); renderRR(); renderPairChips(); renderStrip(); renderList(); renderSkips(); renderReview(); renderCal(); }
+
+clearForm(); clearSkip(); renderAll(); boot();
+})();
+</script>
+
+</body>
+</html>
