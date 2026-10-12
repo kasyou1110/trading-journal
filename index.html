@@ -67,7 +67,7 @@ nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
 .chip.up[aria-pressed="true"]{background:var(--win);border-color:var(--win);color:var(--surface)}
 .chip.down[aria-pressed="true"]{background:var(--loss);border-color:var(--loss);color:var(--surface)}
 input[type=text],input[type=date],input[type=number],textarea{width:100%;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
-textarea{min-height:76px;resize:vertical;line-height:1.6}
+textarea{min-height:76px;resize:vertical;line-height:1.6;overflow:hidden;field-sizing:content}
 input[type=number]{font-family:var(--f-num)}
 .tfgrid{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
 .tfgrid .tfl{font-size:13px;font-weight:700;font-family:var(--f-num)}
@@ -203,7 +203,7 @@ td.wrap{white-space:normal;min-width:11em;text-align:left}
   <details class="panel" id="xfer">
     <summary style="cursor:pointer;font-weight:700;font-size:14px">データの引っ越し（コピー＆貼り付け）</summary>
     <p class="note" id="xferNote"></p>
-    <textarea id="xferText" style="min-height:110px;font-family:var(--f-num);font-size:12px" placeholder="ここに記録データ（{&quot;trades&quot;:...} で始まる文字）を貼り付け"></textarea>
+    <textarea id="xferText" data-nofit style="min-height:110px;max-height:220px;overflow:auto;field-sizing:fixed;font-family:var(--f-num);font-size:12px" placeholder="ここに記録データ（{&quot;trades&quot;:...} で始まる文字）を貼り付け"></textarea>
     <div class="actions" style="margin-top:8px"><button class="btn" type="button" id="xferBtn">貼り付けた記録を取り込む</button><span class="toast" id="xferToast" hidden></span></div>
   </details>
 
@@ -285,7 +285,8 @@ td.wrap{white-space:normal;min-width:11em;text-align:left}
         <div class="field"><label for="f-amt">損益（金額）</label>
           <div class="addrow"><input type="number" id="f-amt" step="any" placeholder="+3000 / -1500">
             <div class="seg sm" id="amtCur" role="group" aria-label="金額の通貨"><button type="button" data-cur="JPY">円</button><button type="button" data-cur="USD">ドル</button></div></div>
-          <div class="note" id="amtConv"></div></div>
+          <div class="note" id="amtConv"></div>
+          <div class="raterow"><label for="fxRate2">換算レート　1ドル＝</label><input type="number" id="fxRate2" step="0.01" min="1" inputmode="decimal"><span>円</span></div></div>
         <div id="riskWarn" class="warnline" hidden>リスクが3%を超えています。TJRの基準は1〜3%（理想は1%）。</div>
         <div class="field"><span class="lbl">結果</span><div class="chips" data-field="result"></div></div>
         <div class="note" id="rrCalc"></div>
@@ -754,7 +755,7 @@ function renderStrip(){
   const tot=uSum(wk); const kR=$("#kR"); kR.textContent=fU(tot); kR.className="num "+rCls(tot);
   $$("#unitSeg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.unit===unit)));
   $("#rateRow").hidden = unit==="R";
-  if(document.activeElement!==$("#fxRate")) $("#fxRate").value = fxRate();
+  ["#fxRate","#fxRate2"].forEach(s => { if(document.activeElement!==$(s)) $(s).value = fxRate(); });
   $("#kP").textContent=pct(s.pr);
   const m=monday(new Date()), e=new Date(m); e.setDate(e.getDate()+6);
   $("#stripLab").textContent=`今週 ${m.getMonth()+1}/${m.getDate()}〜${e.getMonth()+1}/${e.getDate()}`;
@@ -1063,8 +1064,14 @@ function renderAmt(){
 $("#amtCur").addEventListener("click", e => { const b=e.target.closest("[data-cur]"); if(!b) return; amtCur=b.dataset.cur; try{ localStorage.setItem("tj.cur",amtCur); }catch(_){} renderAmt(); });
 $("#f-amt").addEventListener("input", renderAmt);
 $("#unitSeg").addEventListener("click", e => { const b=e.target.closest("[data-unit]"); if(!b) return; unit=b.dataset.unit; try{ localStorage.setItem("tj.unit",unit); }catch(_){} renderAll(); });
-$("#fxRate").addEventListener("change", async e => { const v=Number(e.target.value); if(!(v>0)) return; try{ await put("settings","fx",{rate:v}); }catch(_){} renderAll(); });
-function renderAll(){ renderAmt(); renderRR(); renderPairChips(); renderStrip(); renderList(); renderSkips(); renderReview(); renderCal(); }
+["#fxRate","#fxRate2"].forEach(s => $(s).addEventListener("change", async e => { const v=Math.round(Number(e.target.value)*100)/100; if(!(v>0)) return; try{ await put("settings","fx",{rate:v}); }catch(_){} renderAll(); }));
+/* textareas grow to fit their text, so drag-selecting never triggers fast inner scrolling */
+function fit(el){ if(!el.offsetParent) return; el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
+const fitAll = () => $$("textarea:not([data-nofit])").forEach(fit);
+document.addEventListener("input", e => { if(e.target.tagName==="TEXTAREA" && !e.target.hasAttribute("data-nofit")) fit(e.target); });
+document.addEventListener("click", () => requestAnimationFrame(fitAll));
+window.addEventListener("resize", fitAll);
+function renderAll(){ requestAnimationFrame(fitAll); renderAmt(); renderRR(); renderPairChips(); renderStrip(); renderList(); renderSkips(); renderReview(); renderCal(); }
 
 clearForm(); clearSkip(); renderAll(); boot();
 })();
